@@ -1,0 +1,51 @@
+# Optional app processes — run with: docker compose -f docker-compose.yml -f docker-compose.app.yml up --build
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["npx", "tsx", "apps/api/src/server.ts"]
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://hooklab:hooklab@postgres:5432/hooklab?schema=public
+      REDIS_URL: redis://redis:6379
+      ENDPOINT_SECRET_ENCRYPTION_KEY: ${ENDPOINT_SECRET_ENCRYPTION_KEY}
+      API_HOST: 0.0.0.0
+      API_PORT: "3000"
+      WEBHOOK_ALLOW_LOCALHOST: ${WEBHOOK_ALLOW_LOCALHOST:-0}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  dispatcher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["npx", "tsx", "apps/dispatcher/src/main.ts"]
+    environment:
+      DATABASE_URL: postgresql://hooklab:hooklab@postgres:5432/hooklab?schema=public
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["npx", "tsx", "apps/worker/src/main.ts"]
+    environment:
+      DATABASE_URL: postgresql://hooklab:hooklab@postgres:5432/hooklab?schema=public
+      REDIS_URL: redis://redis:6379
+      ENDPOINT_SECRET_ENCRYPTION_KEY: ${ENDPOINT_SECRET_ENCRYPTION_KEY}
+      WEBHOOK_ALLOW_LOCALHOST: ${WEBHOOK_ALLOW_LOCALHOST:-0}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
