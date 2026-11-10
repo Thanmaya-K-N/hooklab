@@ -1,4 +1,4 @@
-# Deployment (Milestone 10)
+# Deployment
 
 ## Docker Compose (full stack)
 

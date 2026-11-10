@@ -1,4 +1,4 @@
-# Failure scenarios (Milestone 8)
+# Failure scenarios
 
 ## Duplicate BullMQ jobs
 

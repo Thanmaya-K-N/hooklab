@@ -1,4 +1,4 @@
-# Idempotency (Milestone 7)
+# Idempotency
 
 ## Event publish (API)
 

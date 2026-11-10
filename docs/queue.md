@@ -1,4 +1,4 @@
-# Queue layer (Milestone 6)
+# Queue layer
 
 HookLab uses **BullMQ** on **Redis** for asynchronous webhook delivery jobs.
 
@@ -19,11 +19,11 @@ HookLab uses **BullMQ** on **Redis** for asynchronous webhook delivery jobs.
 | **Dispatcher** | Reads outbox → enqueue BullMQ → mark outbox `published` |
 | **Worker** | BullMQ consumer → `processDelivery(deliveryId)` |
 
-The API **does not** talk to Redis directly (Milestone 7).
+The API does not enqueue Redis jobs directly; the dispatcher reads the outbox.
 
 ## BullMQ vs PostgreSQL retries
 
-Milestone 6 sets BullMQ `attempts: 1`. **Retry timing and dead-lettering stay in PostgreSQL** (Milestone 7+) so we do not run two independent schedulers.
+BullMQ jobs use `attempts: 1`. Retry delays and dead-letter state live in PostgreSQL so two schedulers do not compete.
 
 ## Outbox claim states
 

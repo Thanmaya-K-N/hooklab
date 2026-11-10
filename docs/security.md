@@ -1,6 +1,6 @@
 # Security
 
-## Webhook HMAC (Milestone 5)
+## Webhook HMAC
 
 HookLab signs each outbound webhook using the **endpoint signing secret** (shown once when you create an endpoint).
 
@@ -23,7 +23,7 @@ Sign the bytes you send; re-serialized JSON can change field order and break ver
 3. Constant-time HMAC compare.
 4. Then process the event.
 
-## SSRF protection (Milestone 10)
+## SSRF protection
 
 Webhook URLs are attacker-controlled destinations. HookLab applies **two layers**:
 
@@ -43,7 +43,7 @@ Set `WEBHOOK_ALLOW_LOCALHOST=1` in `.env` so `http://127.0.0.1:4000/webhooks` is
 
 ## API hardening
 
-- **Bearer API keys** — SHA-256 hash at rest (Milestone 3)
+- **Bearer API keys** — SHA-256 hash at rest
 - **Rate limiting** — `@fastify/rate-limit` on the API (`API_RATE_LIMIT_MAX`, default 120 req / minute); `/api/v1/health` excluded
 - **Request IDs** — `x-request-id` / Fastify `requestId` in logs
 - **Body limit** — 1 MiB on API and consumer

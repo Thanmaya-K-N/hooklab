@@ -1,6 +1,6 @@
-# Webhook delivery (Milestone 4)
+# Webhook delivery
 
-HookLab now **sends HTTP POST requests** to subscriber endpoints from a **separate worker process**. The API still only accepts events and creates `pending` deliveries.
+Outbound delivery runs in **`apps/worker`**. The API persists events and `pending` deliveries but does not call subscriber URLs during the publish request.
 
 ```mermaid
 sequenceDiagram
@@ -15,15 +15,15 @@ sequenceDiagram
   Worker->>DB: INSERT attempt + UPDATE delivery
 ```
 
-## Worker (BullMQ)
+## Worker
 
-1. API enqueues job `{ deliveryId }` on Redis queue `webhook-deliveries`  
-2. Worker claims the job (concurrency configurable)  
-3. Sets delivery `pending` → `processing`  
+1. Dispatcher enqueues `{ deliveryId }` on queue `webhook-deliveries`  
+2. Worker consumes the job (configurable concurrency)  
+3. Claims delivery `pending` / `retrying` → `processing`  
 4. POSTs signed JSON to `endpoint.url`  
-5. Records `delivery_attempts` and final delivery status  
+5. Inserts `delivery_attempts` and updates delivery status  
 
-Details: [queue.md](./queue.md).
+See [queue.md](./queue.md).
 
 ## Request format
 
@@ -48,20 +48,20 @@ Details: [queue.md](./queue.md).
 
 Redirects are not followed (`redirect: "manual"`). Each delivery re-validates the resolved destination ([security.md](security.md)).
 
-## Status semantics (Milestone 4)
+## Status semantics
 
-| Result | Delivery status |
-|--------|-----------------|
+| Outcome | Typical status |
+|---------|----------------|
 | HTTP 2xx | `succeeded` |
-| HTTP 4xx/5xx or network error | `failed` |
+| Retryable HTTP / network | `retrying` (then outbox) |
+| Non-retryable HTTP | `failed` |
+| Max attempts | `dead_lettered` |
 
-Retries, dead-lettering, and replay are documented in [retry-strategy.md](retry-strategy.md) (Milestone 7).
+Details: [retry-strategy.md](retry-strategy.md).
 
 ## Idempotency
 
-If a delivery is already `succeeded`, the worker does not send again.
-
-**Milestone 8:** `processing` leases and recovery jobs reset stale deliveries to `retrying` and re-enqueue via the outbox. See [failure-scenarios.md](failure-scenarios.md).
+Terminal `succeeded` deliveries are not sent again. Stale `processing` rows are recovered via leases and outbox re-enqueue ([failure-scenarios.md](failure-scenarios.md)).
 
 ## End-to-end local demo
 

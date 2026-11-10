@@ -1,19 +1,8 @@
 # HookLab
 
-Self-hosted webhook delivery platform — learning project for reliable webhook delivery (outbox, retries, HMAC, dashboard).
+Self-hosted webhook delivery: durable events, transactional outbox, signed HTTP delivery, retries, dead-letter/replay, and an operations dashboard.
 
-## Milestone 10 (current): Production hardening
-
-| Area | Implementation |
-|------|----------------|
-| **SSRF** | URL validation + DNS resolve check before every delivery; `WEBHOOK_ALLOW_LOCALHOST=1` for dev |
-| **Rate limits** | `@fastify/rate-limit` on API (health exempt) |
-| **Logging** | Request IDs on API (`x-request-id`) |
-| **Docker** | `Dockerfile` + `docker-compose.app.yml` for API, worker, dispatcher |
-
-Docs: [security.md](docs/security.md) · [deployment.md](docs/deployment.md)
-
-## Quick start (local dev)
+## Quick start
 
 ```powershell
 npm install
@@ -23,17 +12,17 @@ npm run db:migrate
 npm run db:seed
 ```
 
-| Terminal | Command |
-|----------|---------|
-| Consumer | `npm run dev:consumer` |
+| Process | Command |
+|---------|---------|
+| Sample subscriber | `npm run dev:consumer` |
 | API | `npm run dev:api` |
-| Dispatcher | `npm run dev:dispatcher` |
-| Worker | `npm run dev:worker` |
-| Dashboard | `npm run dev:dashboard` |
+| Outbox dispatcher | `npm run dev:dispatcher` |
+| Delivery worker | `npm run dev:worker` |
+| Dashboard (optional) | `npm run dev:dashboard` |
 
-Set `WEBHOOK_ALLOW_LOCALHOST=1` (in `.env.example`) so `http://127.0.0.1:4000/webhooks` registers. Paste seeded API key in dashboard **Settings**.
+For local URLs such as `http://127.0.0.1:4000/webhooks`, set `WEBHOOK_ALLOW_LOCALHOST=1` in `.env`. Put the seeded `hl_live_…` key in the dashboard **Settings** page.
 
-## Docker app tier
+### Docker (API + worker + dispatcher)
 
 ```powershell
 docker compose -f docker-compose.yml -f docker-compose.app.yml up --build
@@ -47,19 +36,17 @@ See [docs/deployment.md](docs/deployment.md).
 npm test
 ```
 
-## Definition of done
-
-HookLab M1–M10 covers: durable events, outbox → BullMQ, signed delivery, retries/dead-letter/replay, failure recovery, dashboard, SSRF + rate limits, and containerized services.
-
-## Documentation index
+## Documentation
 
 | Doc | Topic |
 |-----|--------|
-| [architecture.md](docs/architecture.md) | System shape |
+| [overview.md](docs/overview.md) | Components, entities, doc map |
+| [architecture.md](docs/architecture.md) | Diagrams and data ownership |
+| [event-lifecycle.md](docs/event-lifecycle.md) | Publish → deliver flow |
 | [webhook-delivery.md](docs/webhook-delivery.md) | Worker HTTP path |
-| [retry-strategy.md](docs/retry-strategy.md) | Backoff + outbox |
-| [failure-scenarios.md](docs/failure-scenarios.md) | Recovery drills |
-| [dashboard.md](docs/dashboard.md) | React console |
-| [security.md](docs/security.md) | HMAC + SSRF |
-| [deployment.md](docs/deployment.md) | Docker |
-| [local-development.md](docs/local-development.md) | Env & TLS notes |
+| [retry-strategy.md](docs/retry-strategy.md) | Backoff and outbox retries |
+| [failure-scenarios.md](docs/failure-scenarios.md) | Recovery and replay |
+| [dashboard.md](docs/dashboard.md) | React UI |
+| [security.md](docs/security.md) | HMAC, SSRF, rate limits |
+| [deployment.md](docs/deployment.md) | Container layout |
+| [local-development.md](docs/local-development.md) | Environment and TLS notes |

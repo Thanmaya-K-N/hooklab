@@ -1,4 +1,4 @@
-# Dashboard (Milestone 9)
+# Dashboard
 
 React + Vite + Tailwind UI in `apps/dashboard`. It is a **read-mostly operations console** over the existing REST API — no secrets are persisted server-side for the dashboard.
 

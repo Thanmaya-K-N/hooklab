@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { buildApi } from "../src/app.js";
 import { MemoryStore } from "../src/store/memory-store.js";
 
-describe("HookLab API — Milestone 2", () => {
+describe("HookLab API", () => {
   let store: MemoryStore;
 
   beforeEach(() => {

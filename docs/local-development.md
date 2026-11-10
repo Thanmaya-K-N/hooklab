@@ -2,7 +2,7 @@
 
 ## Environment variables
 
-See `.env.example` for the full list. Required for the API (Milestone 3+):
+See `.env.example` for the full list. Required for the API:
 
 | Variable | Purpose |
 |----------|---------|
@@ -16,7 +16,7 @@ See `.env.example` for the full list. Required for the API (Milestone 3+):
 docker compose up -d postgres
 ```
 
-Redis is included for Milestone 6; safe to start now:
+Redis is required for the dispatcher and worker:
 
 ```powershell
 docker compose up -d

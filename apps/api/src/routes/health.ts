@@ -14,7 +14,6 @@ export async function registerHealthRoutes(
         status: "ok",
         service: "hooklab-api",
         checks: { database: true, redis: true },
-        milestone: 10,
       });
     }
 
@@ -39,7 +38,6 @@ export async function registerHealthRoutes(
       status: ok ? "ok" : "degraded",
       service: "hooklab-api",
       checks: { database, redis },
-      milestone: 10,
     });
   });
 }

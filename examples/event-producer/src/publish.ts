@@ -9,7 +9,7 @@ export type PublishResult = {
 export type PublishOptions = {
   webhookUrl: string;
   event: SampleEvent;
-  /** Optional extra headers (HookLab will add signing headers in later milestones). */
+  /** Optional extra headers (HookLab adds signing headers on platform delivery). */
   headers?: Record<string, string>;
   timeoutMs?: number;
 };

@@ -1,78 +1,140 @@
-# Architecture (Milestone 2)
+# Architecture
+
+HookLab is a **modular monolith**: one TypeScript repo, several **independent Node processes**, shared libraries, and **PostgreSQL as the source of truth** for events and delivery state. Redis/BullMQ is a **transport layer**, not the system of record.
+
+## System context
 
 ```mermaid
-flowchart LR
-  Client[Client app] --> API[HookLab API]
-  API --> Memory[(In-memory store)]
-  Memory --> Deliveries[Pending deliveries]
+flowchart TB
+  subgraph clients [Clients]
+    App[Your application]
+    Dash[React dashboard]
+    Prod[examples/event-producer]
+  end
+
+  subgraph hooklab [HookLab processes]
+    API[apps/api]
+    DISP[apps/dispatcher]
+    WRK[apps/worker]
+  end
+
+  subgraph data [Infrastructure]
+    PG[(PostgreSQL)]
+    RQ[(Redis / BullMQ)]
+  end
+
+  subgraph subs [Subscribers]
+    CONS[examples/webhook-consumer]
+    EXT[Customer HTTPS endpoints]
+  end
+
+  App -->|Bearer API key| API
+  Dash -->|Bearer API key| API
+  Prod --> API
+
+  API --> PG
+  DISP --> PG
+  DISP --> RQ
+  WRK --> RQ
+  WRK --> PG
+  WRK -->|signed POST| CONS
+  WRK -->|signed POST| EXT
 ```
 
-Milestone 1’s **producer → consumer** loop remains in `examples/` for learning and later end-to-end tests. The platform path is now:
+## End-to-end delivery path
 
 ```mermaid
 sequenceDiagram
-  participant Client as Client
-  participant API as HookLab API
-  participant Store as Store
-  Client->>API: POST /api/v1/endpoints
-  Client->>API: POST /api/v1/events
-  API->>Store: Event + pending deliveries
-  API-->>Client: 202 Accepted
+  participant C as Client
+  participant API as API
+  participant PG as PostgreSQL
+  participant D as Dispatcher
+  participant Q as BullMQ
+  participant W as Worker
+  participant S as Subscriber
+
+  C->>API: POST /api/v1/events
+  API->>PG: TX: event + deliveries + outbox
+  API-->>C: 202 Accepted
+
+  loop Poll outbox
+    D->>PG: claim outbox rows
+    D->>Q: enqueue job deliveryId
+    D->>PG: mark published
+  end
+
+  Q->>W: job deliveryId
+  W->>PG: claim delivery processing
+  W->>PG: load event + endpoint secret
+  W->>S: POST webhook HMAC
+  W->>PG: attempt row + status update
 ```
 
-Outbound HTTP to subscriber URLs is **not** wired yet (Milestone 4).
+**Guarantee:** at-least-once **execution** inside HookLab (retries, duplicate jobs tolerated). **Exactly-once HTTP delivery** to arbitrary subscribers is not claimed.
+
+## Components (jist)
+
+| Piece | Path | Role |
+|-------|------|------|
+| **API** | `apps/api` | Auth, register endpoints, publish events, list deliveries/attempts, replay, metrics, health |
+| **Dispatcher** | `apps/dispatcher` | Transactional **outbox** → enqueue `webhook-deliveries` jobs idempotently |
+| **Worker** | `apps/worker` | Claim delivery, HTTP POST, HMAC, record attempts, retries via outbox |
+| **Dashboard** | `apps/dashboard` | Vite/React UI over the same REST API |
+| **Shared** | `packages/shared` | Types, validation, HMAC, retry math, SSRF checks, `deliverWebhook` |
+| **Queue** | `packages/queue` | BullMQ publisher/worker helpers, Redis ping |
+| **Consumer** | `examples/webhook-consumer` | Reference subscriber (verify signature, idempotent by event id) |
+| **Producer** | `examples/event-producer` | CLI to publish via HookLab API or direct POST |
 
 ## Repository layout
 
 ```
 hooklab/
 ├── apps/
-│   └── api/                 # Fastify REST API
+│   ├── api/           # Fastify REST
+│   ├── dispatcher/    # Outbox poller
+│   ├── worker/        # Delivery executor
+│   └── dashboard/     # React console
 ├── packages/
-│   └── shared/              # Types, validation, subscription matching
-├── examples/
-│   ├── webhook-consumer/    # Sample subscriber
-│   └── event-producer/        # CLI: direct webhook or HookLab API
-├── docs/
-└── prisma/                  # Milestone 3
+│   ├── shared/        # Domain + delivery HTTP
+│   └── queue/         # BullMQ integration
+├── examples/          # Learning & E2E demos
+├── prisma/            # Schema + migrations
+├── docs/              # Deep dives per topic
+├── Dockerfile         # Shared image for app processes
+├── docker-compose.yml # Postgres + Redis
+└── docker-compose.app.yml
 ```
 
-## Design choices
+## Data ownership
 
-### Modular monolith
+| Concern | Authoritative store |
+|---------|---------------------|
+| Events, endpoints, deliveries, attempts | PostgreSQL |
+| Retry schedule, dead-letter, replay | PostgreSQL (`next_retry_at`, outbox rows) |
+| In-flight job queue | Redis (BullMQ); jobs keyed by `deliveryId` |
+| API keys | SHA-256 hash in `organizations` |
+| Endpoint signing secrets | AES-256-GCM ciphertext in DB |
 
-One codebase, multiple **processes** later (API, dispatcher, worker). Shared types live in `@hooklab/shared` so the worker will reuse the same event shape and validators without copy-paste.
+## Cross-cutting concerns
 
-### In-memory store (temporary)
+| Topic | Where | Doc |
+|-------|--------|-----|
+| Outbox + retries | API TX, dispatcher, worker | [retry-strategy.md](retry-strategy.md) |
+| Idempotency | Publish header + delivery claim | [idempotency.md](idempotency.md) |
+| HMAC + SSRF | `packages/shared`, worker | [security.md](security.md) |
+| Leases & recovery | Worker + dispatcher loops | [failure-scenarios.md](failure-scenarios.md) |
+| Schema | Prisma | [database-design.md](database-design.md) |
 
-Trade-off: fast to learn subscription matching and API contracts without Docker Postgres. Cost: no durability, no multi-instance safety. Milestone 3 swaps `MemoryStore` for Prisma repositories behind the same route handlers pattern.
+## Local vs Docker
 
-### Validation in `shared`
+- **Dev:** `npm run dev:*` on the host; Postgres/Redis in Compose; consumer on `:4000`.
+- **App tier:** optional `docker-compose.app.yml` runs API, dispatcher, worker in one image ([deployment.md](deployment.md)).
 
-URL and event-type rules are pure functions with unit tests. The API only maps validation failures to HTTP 400 — keeps handlers thin and tests fast.
+## Mental model
 
-### Secrets
+1. **Publish** = durable commit in Postgres (never block on HTTP to subscribers).
+2. **Dispatch** = bridge committed work to Redis safely (repeatable).
+3. **Deliver** = worker owns one delivery at a time; Postgres records every attempt.
+4. **Observe** = dashboard + metrics + delivery attempt APIs.
 
-Endpoint signing secrets are generated on create and returned once as `signingSecret`. List/get responses strip secrets — practice for production APIs.
-
-## Event JSON
-
-**Publish request** (`POST /api/v1/events`):
-
-```json
-{ "type": "task.completed", "data": { "taskId": "task_123" } }
-```
-
-**Stored event** includes server-assigned `id`, `organizationId`, and timestamps.
-
-**Future webhook body** (Milestone 4+) will mirror Milestone 1’s consumer shape: `id`, `type`, `createdAt`, `data`.
-
-## Planned processes (later milestones)
-
-| Process | Milestone |
-|---------|-----------|
-| API server | 2 ✓ |
-| Delivery worker | 4–6 |
-| Outbox dispatcher | 7 |
-| PostgreSQL | 3 |
-| Redis / BullMQ | 6 |
+Further reading: [overview.md](overview.md) (doc index + glossary).

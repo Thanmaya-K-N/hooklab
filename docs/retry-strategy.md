@@ -1,4 +1,4 @@
-# Retry strategy (Milestone 7)
+# Retry strategy
 
 HookLab retries are **owned by PostgreSQL**, not BullMQ.
 
